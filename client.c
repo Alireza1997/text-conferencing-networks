@@ -21,13 +21,28 @@
 #define MAX_DATA 100
 #define MAX_FIELD 20
 
+//======== Type specs ========//
+
+#define LOGIN       0
+#define LO_ACK      1
+#define LO_NAK      2
+#define EXIT        3
+#define JOIN        4
+#define JN_ACK      5
+#define JN_NAK      6
+#define LEAVE_SESS  7
+#define NEW_SESS    8
+#define NS_ACK      9
+#define MESSAGE     10
+#define QUERY       11
+#define QU_ACK      12
+
 //======== prototypes ========//
 struct packet{
 	unsigned int type;
 	unsigned int size; 
     unsigned char source[MAX_NAME];    
     unsigned char msg[MAX_DATA];
-// type:size:id:id,password
 };
 
 // get sockaddr, IPv4 or IPv6:
@@ -48,6 +63,31 @@ void processPacket(struct packet data, char* packetInfo){
     return;    
 }
 
+void deProcessPacket(int *type,int *size, char *source,	char *msg, char* buf){
+	int i, j = 0;
+	for (i = 0; buf[i]!= ':'; i++){
+		*type *=10;
+		*type += buf[i] - '0';
+	}
+	for (i = i+1; buf[i]!= ':'; i++){
+		*size *=10;
+		*size += buf[i] - '0';
+	}
+	j = i;
+	for (i = i+1; buf[i]!= ':'; i++){
+		source[i-j-1] = buf[i]; 				
+		//printf("%s \n", filename);
+	}
+	source[i-j-1] = '\0';
+	j = i;
+	for (i = i+1; i-j <= *size; i++){
+		msg[i-j-1] = buf[i]; 				
+		//printf("%u \n", buf[i]);
+    }
+    msg[i-j-1] = '\0';
+
+}
+
 int main(int argc, char *argv[]) {
 
     //======== Variable Setup ========//
@@ -59,9 +99,11 @@ int main(int argc, char *argv[]) {
     int rv;
     char s[INET6_ADDRSTRLEN];
 
-    struct packet data;    
+    struct packet data;
+    struct packet reData;    
 
     char clientID[MAX_FIELD];
+    char sessionID[MAX_FIELD];
     char password[MAX_FIELD];
     char serverIP[MAX_FIELD];
     char serverPort[MAX_FIELD];     
@@ -71,49 +113,12 @@ int main(int argc, char *argv[]) {
     int loggedIn = 0;
 
     fd_set readfds;
-    //======== Connection Setup ========//
-
-    // memset(&hints, 0, sizeof hints);
-    // hints.ai_family = AF_UNSPEC;
-    // hints.ai_socktype = SOCK_STREAM;
-
-    // if ((rv = getaddrinfo(argv[1], argv[2], &hints, &servinfo)) != 0) {
-    //     fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-    //     return 1;
-    // }
-
-    // // loop through all the results and connect to the first we can
-    // for (p = servinfo; p != NULL; p = p->ai_next) {
-    //     if ((sockfd = socket(p->ai_family, p->ai_socktype,
-    //             p->ai_protocol)) == -1) {
-    //         perror("client: socket");
-    //         continue;
-    //     }
-
-
-    //     if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-    //         close(sockfd);
-    //         perror("client: connect");
-    //         continue;
-    //     }
-
-    //     break;
-    // }
-
-    // if (p == NULL) {
-    //     fprintf(stderr, "client: failed to connect\n");
-    //     return 2;
-    // }
-
-    // inet_ntop(p->ai_family, get_in_addr((struct sockaddr *) p->ai_addr),
-    //         s, sizeof s);
-    // printf("client: connecting to %s\n", s);
+    
 
     //======== Conference Loop ========//
-
     while (1) {
 
-
+        //======== select setup ========//
         FD_ZERO(&readfds);
         FD_SET(fileno(stdin),&readfds);
 
@@ -124,11 +129,11 @@ int main(int argc, char *argv[]) {
             select(fileno(stdin)+1,&readfds,NULL,NULL,NULL);    	
         }
 
+        //======== Responses to keyboard input ========//
         if (FD_ISSET(fileno(stdin),&readfds)){
             printf("input detected\n");  
 
             char command[MAX_DATA];
-            // printf ("Enter Command or Message: \n");
             scanf("%s", command);
             
             if (command[0] == '/'){
@@ -151,7 +156,7 @@ int main(int argc, char *argv[]) {
                         printf("serverPort: %s\n", serverPort);
 
                         strcpy(data.msg,password);
-                        data.type = 0;
+                        data.type = LOGIN;
                         data.size = sizeof(password);
                         strcpy(data.source, clientID);
 
@@ -201,22 +206,22 @@ int main(int argc, char *argv[]) {
                         
 
                         //======== login ack ========//
-                        struct timeval tv;
-                        tv.tv_sec = 0;
-                        tv.tv_usec = 100;
-                        setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,sizeof(struct timeval));
+                        // struct timeval tv;
+                        // tv.tv_sec = 0;
+                        // tv.tv_usec = 100000;
+                        // setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,sizeof(struct timeval));
                         
-                        int numbytes=recv(sockfd, buf,sizeof (buf) , 0);
-                        buf[numbytes] = '\0';
+                        // int numbytes=recv(sockfd, buf,sizeof (buf) , 0);
+                        // deProcessPacket(&reData.type,&reData.size, reData.source,	reData.msg, buf);
                 
-                        if (numbytes >= 0 && strcmp(buf,"ACK") >= 0){
-                            printf("recieveBytes: %d \n", numbytes);
-                            printf("message recieved: %s \n", buf);
-                            loggedIn = 1;
-                        }else{
-                            printf("\n ACK not recieved \n\n");
+                        // if (reData.type == LO_ACK){
+                        //     printf("recieveBytes: %d \n", numbytes);
+                        //     printf("message recieved: %s \n", buf);
+                        //     loggedIn = 1;
+                        // }else if (reData.type == LO_NAK){
+                        //     printf("\n ACK not recieved \n\n");
                             loggedIn = 1; //=========================REMOVE==============================//
-                        }
+                        // }
                         continue;
                     }
                     
@@ -224,7 +229,8 @@ int main(int argc, char *argv[]) {
                 else if(!strcmp(command,"/logout")){
 
                     if (loggedIn){
-                        
+                        close(sockfd);
+                        loggedIn = 0;
                         continue;
                     }
                     else{
@@ -234,19 +240,100 @@ int main(int argc, char *argv[]) {
 
                 }
                 else if(!strcmp(command,"/joinsession")){
+
+                    if (loggedIn){
+                        //======== input and packet processing ========//
+                        scanf("%s", sessionID);
+                        
+                        strcpy(data.msg,sessionID);
+                        data.type = JOIN;
+                        data.size = sizeof(sessionID);
+                        strcpy(data.source, clientID);
+
+                        processPacket(data,sendBuf);
+
+                        //======== request ========//
+
+                        numbytes = send(sockfd,sendBuf,strlen(sendBuf),0);
+                        printf("sendBytes: %d \n", numbytes);
+                        continue;
+                    }
+                    else{
+                        printf("Not logged in\n");
+                        continue;
+                    }
                     
                 }
                 else if(!strcmp(command,"/leavesession")){
-                    
+                    if (loggedIn){
+                        //======== input and packet processing ========//
+
+                        strcpy(data.msg,"");
+                        data.type = LEAVE_SESS;
+                        data.size = sizeof(sessionID);
+                        strcpy(data.source, clientID);
+
+                        processPacket(data,sendBuf);
+
+                        //======== request ========//
+
+                        numbytes = send(sockfd,sendBuf,strlen(sendBuf),0);
+                        printf("sendBytes: %d \n", numbytes);
+                        continue;
+                    }
+                    else{
+                        printf("Not logged in\n");
+                        continue;
+                    }                    
                 }
                 else if(!strcmp(command,"/createsession")){
-                    
+                    if (loggedIn){
+                        //======== input and packet processing ========//
+                        scanf("%s", sessionID);
+                        
+                        strcpy(data.msg,sessionID);
+                        data.type = NEW_SESS;
+                        data.size = sizeof(sessionID);
+                        strcpy(data.source, clientID);
+
+                        processPacket(data,sendBuf);
+
+                        //======== request ========//
+
+                        numbytes = send(sockfd,sendBuf,strlen(sendBuf),0);
+                        printf("sendBytes: %d \n", numbytes);
+                        continue;
+                    }
+                    else{
+                        printf("Not logged in\n");
+                        continue;
+                    }  
                 }
                 else if(!strcmp(command,"/list")){
-                    
+                    if (loggedIn){
+                        //======== input and packet processing ========//
+
+                        strcpy(data.msg,"");
+                        data.type = QUERY;
+                        data.size = sizeof(sessionID);
+                        strcpy(data.source, clientID);
+
+                        processPacket(data,sendBuf);
+
+                        //======== request ========//
+
+                        numbytes = send(sockfd,sendBuf,strlen(sendBuf),0);
+                        printf("sendBytes: %d \n", numbytes);
+                        continue;
+                    }
+                    else{
+                        printf("Not logged in\n");
+                        continue;
+                    }
                 }
                 else if(!strcmp(command,"/quit")){
-                    
+                    printf("bye!");
+                    exit(0);
                 }
 
             }
@@ -269,41 +356,53 @@ int main(int argc, char *argv[]) {
                     printf("you are not logged in!\n");
                 }        
             }
-        }
+        }//======== Responses to server replies ========//
         else if(loggedIn && FD_ISSET(sockfd,&readfds)){
             printf("Server sent something back\n");
-
             numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0);
             printf("numbytes: %d\n", numbytes);
-
-            // if ((numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0)) == -1) {
-            //     perror("recv");
-            //     exit(1);
-            // }
-
-            // printf("numbytes: %d\n", numbytes);
-            buf[numbytes] = '\0';
-            
+            buf[numbytes] = '\0';            
             printf("client: received '%s'\n", buf);
+            deProcessPacket(&reData.type,&reData.size, reData.source,	reData.msg, buf);
+            printf("type: %d\n", reData.type);
+            printf("size: %d\n", reData.size);
+            printf("source: %s\n", reData.source);
+            printf("msg: %s\n", reData.msg);
+
+            switch (reData.type){
+                case(LOGIN):
+                    break;       
+                case(LO_ACK):
+                    printf("login successful!\n");
+                    loggedIn = 1;
+                    break;           
+                case(LO_NAK):
+                    printf("login failed!\n");
+                    break;        
+                case(JN_ACK):
+                    printf("join successful!\n");
+                    break;      
+                case(JN_NAK):
+                    printf("join failed!\n");
+                    break;      
+                case(NS_ACK):
+                    break;      
+                case(MESSAGE):
+                    printf("%s: %s\n", reData.source, reData.msg);
+                    break;        
+                case(QU_ACK):
+                    printf("%s\n", reData.msg);
+                    break;
+                default:
+                    printf("invalid reply\n");
+            }
+                
+
         }
         else{
             // printf("whats happening anymore\n");
         }
-
-        // send(sockfd, message, strlen(message), 0);
-        // //freeaddrinfo(servinfo); // all done with this structure
-	
-        // if ((numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0)) == -1) {
-        //     perror("recv");
-        //     exit(1);
-        // }
-
-        // buf[numbytes] = '\0';
-
-        // printf("client: received '%s'\n", buf);
     }
-
-    close(sockfd);
 
     return 0;
 }
