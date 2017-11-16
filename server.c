@@ -243,9 +243,15 @@ int main(void) {
 
 				case(3):
 					//exit
-					
 					close(i); // bye!
-                        		FD_CLR(i, &master); // remove from master set
+					FD_CLR(i, &master); // remove from master set
+					
+					for (l=0;l<MAXUSERS;l++){
+						if (strcmp (usernames[l],source)==0)break;
+					}
+					file_id[l]=-1;
+				
+					
 					break;
 				case(4):
 					//join
@@ -289,7 +295,10 @@ int main(void) {
 					for (l=0;l<MAXUSERS;l++){
 							if (strcmp (usernames[l],source)==0)break;
 					}
-					strcpy(session_ids[l],"");	
+					memset(session_ids[l],0,strlen(session_ids[l]));
+					
+					file_id[k]=-1;
+					
 					break;
 				case(8):
 					printf("%s\n", "case8");
@@ -355,9 +364,12 @@ int main(void) {
 					message.type=12;
 					strcpy(message.source,source);
 					memset(message.data,0,strlen(message.data));
+					strcat(message.data,"list of (user session)");
+					
 					for (l=0;l<MAXUSERS;l++){
-							if (file_id[l]!=-1){
+							if (file_id[l]!=-1 &&file_id[l]!=i){
 								strcat(message.data,usernames[l]);
+								strcat(message.data," ");
 								strcat(message.data,session_ids[l]);
 							}
 					}
