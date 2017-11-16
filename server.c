@@ -44,12 +44,19 @@ int main(void) {
 	
 	const char * usernames[MAXUSERS];
 	const char * passwords[MAXUSERS];
-	char * session_ids[MAXUSERS]={""};
+	char ** session_ids;
 	 int file_id [MAXUSERS]={-1};
+
+	 session_ids = malloc(MAXUSERS * sizeof(char*));
+	 for (int i = 0; i < MAXUSERS; i++)
+	 session_ids[i] = malloc((MAX_DATA+1) * sizeof(char));
+	//  session_ids[0]="";
+	//  session_ids[1]="";
 	usernames[0]="blah";
 	usernames[1]="hi";
 	passwords[0]="1";
 	passwords[1]="2";
+
 	struct lab3message message;
 	
 	
@@ -79,6 +86,8 @@ int main(void) {
 	char *password;
 	char user_session[100];		
 	char message_info[100];	
+	char message_to_send[100];	
+	
 	char users_online[100];
 		
 
@@ -169,7 +178,9 @@ int main(void) {
                                 newfd);
                     }
                 } else {
-                    // handle data from a client
+
+					// handle data from a client
+					// strcpy(buf,"");
                     if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
                         // got error or connection closed by client
                         if (nbytes == 0) {
@@ -180,18 +191,32 @@ int main(void) {
                         }
                         close(i); // bye!
                         FD_CLR(i, &master); // remove from master set
-                    } else {
+                    } 
+
+		else { //deal with
+
 			processPacket(&type, &size, source, data,buf);
+
 			switch(type){
 
 				case (0):
-					user=strtok(data,",");
-					password=strtok(NULL,",");
+					printf("%s\n","case0");
+					//user=strtok(data,",");
+					//password=strtok(NULL,",");
 					int k;
 					for (k=0;k<MAXUSERS;k++){
-						if (strcmp (usernames[k],user)==0)break;
+						if (strcmp (usernames[k],source)==0)break;
 					}
-					if (strcmp(passwords[k],password)==0){
+					printf("%d\n",k);
+					
+					printf("%s\n",usernames[k]);
+					printf("%s\n",passwords[k]);
+					printf("%s\n",data);
+					
+					
+					
+					if (strcmp(passwords[k],data)==0){
+						printf("%s\n","login ack");
 						//login ack
 						message.type=1;		
 						strcpy(message.source,source);
@@ -209,13 +234,10 @@ int main(void) {
 						message.size=strlen(message.data);											
 										
 					}
-				//Prepare and send message
-				preparePacket(message, buf);
-				if (send(file_id[j], buf, nbytes, 0) == -1) {
-					perror("send");
-					}
 				
-				
+					printf("%s","done case0");
+					
+
 				
 				break;
 
@@ -229,13 +251,18 @@ int main(void) {
 					//join
 					//check if session exists:
 					for(session=0;session<MAXUSERS;session++){
+						printf("session: %d\n", session);
+						printf("id: %s\n", session_ids[session]);
+						printf("exists: %d\n", exists);	
 						if (strcmp (session_ids[session],data)==0){
 							exists=1; 
 							break;						
 						}
 						
 					}
-					
+					printf("session: %d\n", session);
+					printf("id: %s\n", session_ids[session]);
+					printf("exists: %d\n", exists);				
 					//if exists, add session name to user's session id and send jn_ack
 					if(exists){
 						for (l=0;l<MAXUSERS;l++){
@@ -263,19 +290,29 @@ int main(void) {
 							if (strcmp (usernames[l],source)==0)break;
 					}
 					strcpy(session_ids[l],"");	
-					
 					break;
 				case(8):
+					printf("%s\n", "case8");
+					printf("%s\n", buf);
+					
 					//add new session, get user id and add the session id
 					for (l=0;l<MAXUSERS;l++){
 							if (strcmp (usernames[l],source)==0)break;
 					}
-					strcpy(session_ids[l],data);	
+					printf("%s\n", "got user");
+					printf("%d\n", l);
+					printf("%s\n", data);
+					printf("%s\n", session_ids[l]);
+					strcpy(session_ids[l],data);
+				
 					//send ack
+					printf("%s\n", "copied");
+					
 					message.type=9;
 					strcpy(message.source,source);
 					strcpy(message.data,data);
 					message.size=strlen(message.data);
+					printf("%s\n", "done");
 					
 					break;
 		
@@ -317,6 +354,7 @@ int main(void) {
 					//quack
 					message.type=12;
 					strcpy(message.source,source);
+					memset(message.data,0,strlen(message.data));
 					for (l=0;l<MAXUSERS;l++){
 							if (file_id[l]!=-1){
 								strcat(message.data,usernames[l]);
@@ -326,21 +364,35 @@ int main(void) {
 					message.size=strlen(message.data);
 					
 					break;
+				
 		
 
 			}
 			// if it is not a broadcasting message, send packet back to user
-			if(type!=10){
-			//Prepare and send message to user
-				preparePacket(message, buf);
-				if (send(i, buf, nbytes, 0) == -1) {
-					perror("send");
-					}
-			}
+			
 	
 
+			
+                    
+			
 
-                    }
+		if(type!=10 && type!=7){
+			printf("%s\n","message being sent");
+			
+			//Prepare and send message to user
+				preparePacket(message, message_to_send);
+				if (send(i, message_to_send, strlen(message_to_send), 0) == -1) {
+					perror("send");
+					}
+					printf("%s\n",message_to_send);
+					strcpy(message_to_send,"");
+					
+					printf("%s\n","message sent");
+			}
+			
+			
+		}//end deal with client message
+
                 } // END handle data from client
             } // END got new incoming connection
         } // END looping through file descriptors
@@ -352,6 +404,10 @@ int main(void) {
 
 
 void processPacket(int *type,int *size, char *source,char *data , char *buf){
+	*type = 0; *size = 0; 
+	memset(source,0,strlen(source));	
+	memset(data,0,strlen(data));	
+	
 	int i, j = 0;
 	for (i = 0; buf[i]!= ':'; i++){
 		*type *=10;
@@ -372,10 +428,19 @@ void processPacket(int *type,int *size, char *source,char *data , char *buf){
 		data[i-j-1] = buf[i]; 				
 		//printf("%u \n", buf[i]);
 	}
+	printf("%s\n", "in process packet");
+	printf("buf: %s\n", buf);
+	
+	printf("type: %d\n", *type);
+	printf("size: %d\n", *size );
+	printf("source: %s\n", source);
+	printf("data: %s\n", data );
 
+	memset(buf,0,strlen(buf));	
+	
 }
 
-
+// /login blah 1 127.0.0.1 9034
 
 char* preparePacket(struct lab3message message,  char* message_info){
 
@@ -388,11 +453,12 @@ char* preparePacket(struct lab3message message,  char* message_info){
 	strcat(message_info, buffer);
 
  
-	sprintf(buffer,"%d:",message.source);
-	strcat(message_info, buffer);
+	strcat(message_info, message.source);
 
-
+	strcat(message_info, ":");
+	
 	strcat(message_info, message.data);
+//	message_info[message.size] = '\0';
 
 	
 

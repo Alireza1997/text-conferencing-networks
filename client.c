@@ -64,7 +64,10 @@ void processPacket(struct packet data, char* packetInfo){
 }
 
 void deProcessPacket(int *type,int *size, char *source,	char *msg, char* buf){
-	int i, j = 0;
+    *type = 0; *size = 0;
+    memset(source,0,strlen(source));	
+	memset(msg,0,strlen(msg));
+    int i, j = 0;
 	for (i = 0; buf[i]!= ':'; i++){
 		*type *=10;
 		*type += buf[i] - '0';
@@ -85,7 +88,8 @@ void deProcessPacket(int *type,int *size, char *source,	char *msg, char* buf){
 		//printf("%u \n", buf[i]);
     }
     msg[i-j-1] = '\0';
-
+    memset(buf,0,strlen(buf));	
+	// memset(data,0,strlen(data));
 }
 
 int main(int argc, char *argv[]) {
@@ -157,7 +161,7 @@ int main(int argc, char *argv[]) {
 
                         strcpy(data.msg,password);
                         data.type = LOGIN;
-                        data.size = sizeof(password);
+                        data.size = strlen(password);
                         strcpy(data.source, clientID);
 
                         processPacket(data,sendBuf);
@@ -220,7 +224,7 @@ int main(int argc, char *argv[]) {
                         //     loggedIn = 1;
                         // }else if (reData.type == LO_NAK){
                         //     printf("\n ACK not recieved \n\n");
-                            loggedIn = 1; //=========================REMOVE==============================//
+                            // loggedIn = 1; //=========================REMOVE==============================//
                         // }
                         continue;
                     }
@@ -247,7 +251,7 @@ int main(int argc, char *argv[]) {
                         
                         strcpy(data.msg,sessionID);
                         data.type = JOIN;
-                        data.size = sizeof(sessionID);
+                        data.size = strlen(sessionID);
                         strcpy(data.source, clientID);
 
                         processPacket(data,sendBuf);
@@ -270,7 +274,7 @@ int main(int argc, char *argv[]) {
 
                         strcpy(data.msg,"");
                         data.type = LEAVE_SESS;
-                        data.size = sizeof(sessionID);
+                        data.size = strlen(sessionID);
                         strcpy(data.source, clientID);
 
                         processPacket(data,sendBuf);
@@ -293,7 +297,7 @@ int main(int argc, char *argv[]) {
                         
                         strcpy(data.msg,sessionID);
                         data.type = NEW_SESS;
-                        data.size = sizeof(sessionID);
+                        data.size = strlen(sessionID);
                         strcpy(data.source, clientID);
 
                         processPacket(data,sendBuf);
@@ -315,7 +319,7 @@ int main(int argc, char *argv[]) {
 
                         strcpy(data.msg,"");
                         data.type = QUERY;
-                        data.size = sizeof(sessionID);
+                        data.size = strlen(sessionID);
                         strcpy(data.source, clientID);
 
                         processPacket(data,sendBuf);
@@ -348,7 +352,17 @@ int main(int argc, char *argv[]) {
                     }
                     printf("message: %s\n", message);
 
-                    numbytes = send(sockfd, message, strlen(message), 0);
+                    //======== input and packet processing ========//
+
+                    strcpy(data.msg,message);
+                    data.type = MESSAGE;
+                    data.size = strlen(data.msg);
+                    strcpy(data.source, clientID);
+
+                    processPacket(data,sendBuf);
+                    
+                    //======== request ========//
+                    numbytes = send(sockfd, sendBuf, strlen(sendBuf), 0);
                     printf("numbytes: %d\n", numbytes);
                 
                 }
@@ -357,7 +371,7 @@ int main(int argc, char *argv[]) {
                 }        
             }
         }//======== Responses to server replies ========//
-        else if(loggedIn && FD_ISSET(sockfd,&readfds)){
+        else if(FD_ISSET(sockfd,&readfds)){
             printf("Server sent something back\n");
             numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0);
             printf("numbytes: %d\n", numbytes);
@@ -369,9 +383,7 @@ int main(int argc, char *argv[]) {
             printf("source: %s\n", reData.source);
             printf("msg: %s\n", reData.msg);
 
-            switch (reData.type){
-                case(LOGIN):
-                    break;       
+            switch (reData.type){   
                 case(LO_ACK):
                     printf("login successful!\n");
                     loggedIn = 1;
@@ -386,6 +398,7 @@ int main(int argc, char *argv[]) {
                     printf("join failed!\n");
                     break;      
                 case(NS_ACK):
+                    printf("New Session Made!\n");
                     break;      
                 case(MESSAGE):
                     printf("%s: %s\n", reData.source, reData.msg);
