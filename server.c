@@ -13,8 +13,12 @@
 #include <netdb.h>
 
 #define PORT "9034"   // port we're listening on
+#define MAXUSERS 2
+#define MAX_NAME 10
+#define MAX_DATA 100
 
 // get sockaddr, IPv4 or IPv6:
+
 
 void *get_in_addr(struct sockaddr *sa) {
     if (sa->sa_family == AF_INET) {
@@ -24,10 +28,29 @@ void *get_in_addr(struct sockaddr *sa) {
     return &(((struct sockaddr_in6*) sa)->sin6_addr);
 }
 
+struct lab3message {
+	unsigned int type;
+	unsigned int size;
+	unsigned char source[10];
+	unsigned char data[100];
+};
+
+void processPacket(int *type,int *size, char *source,char *data , char *buf);
+char* preparePacket(struct lab3message message,  char* message_info);
+
+
+
 int main(void) {
 	
-
-
+	const char * usernames[MAXUSERS];
+	const char * passwords[MAXUSERS];
+	char * session_ids[MAXUSERS]={""};
+	 int file_id [MAXUSERS]={-1};
+	usernames[0]="blah";
+	usernames[1]="hi";
+	passwords[0]="1";
+	passwords[1]="2";
+	struct lab3message message;
 	
 	
     fd_set master; // master file descriptor list
@@ -46,7 +69,18 @@ int main(void) {
     char remoteIP[INET6_ADDRSTRLEN];
 
     int yes = 1; // for setsockopt() SO_REUSEADDR, below
-    int i, j, rv;
+    int i, j, l,session, rv;
+	int exists=0;
+    int type;
+    int size;
+	char source [100];
+	char data [100];	
+	char *user;
+	char *password;
+	char user_session[100];		
+	char message_info[100];	
+	char users_online[100];
+		
 
     struct addrinfo hints, *ai, *p;
 
@@ -147,19 +181,165 @@ int main(void) {
                         close(i); // bye!
                         FD_CLR(i, &master); // remove from master set
                     } else {
+			processPacket(&type, &size, source, data,buf);
+			switch(type){
 
-                        for (j = 0; j <= fdmax; j++) {
-                            printf("sending");
-                            // send to everyone!
-                            if (FD_ISSET(j, &master)) {
-                                // except the listener and ourselves
-                                if (j != listener && j != i) {
-                                    if (send(j, buf, nbytes, 0) == -1) {
-                                        perror("send");
-                                    }
-                                }
-                            }
-                        }
+				case (0):
+					user=strtok(data,",");
+					password=strtok(NULL,",");
+					int k;
+					for (k=0;k<MAXUSERS;k++){
+						if (strcmp (usernames[k],user)==0)break;
+					}
+					if (strcmp(passwords[k],password)==0){
+						//login ack
+						message.type=1;		
+						strcpy(message.source,source);
+						strcpy(message.data,"");
+						message.size=strlen(message.data);											
+						// insert fd of this user into file_id 
+						file_id[k]=i;
+	
+					}
+					else{
+						//login nack
+						message.type=2;
+						strcpy(message.source,source);
+						strcpy(message.data,"incorrect password");
+						message.size=strlen(message.data);											
+										
+					}
+				//Prepare and send message
+				preparePacket(message, buf);
+				if (send(file_id[j], buf, nbytes, 0) == -1) {
+					perror("send");
+					}
+				
+				
+				
+				break;
+
+				case(3):
+					//exit
+					
+					close(i); // bye!
+                        		FD_CLR(i, &master); // remove from master set
+					break;
+				case(4):
+					//join
+					//check if session exists:
+					for(session=0;session<MAXUSERS;session++){
+						if (strcmp (session_ids[session],data)==0){
+							exists=1; 
+							break;						
+						}
+						
+					}
+					
+					//if exists, add session name to user's session id and send jn_ack
+					if(exists){
+						for (l=0;l<MAXUSERS;l++){
+							if (strcmp (usernames[l],source)==0)break;
+						}
+						strcpy(session_ids[l],data);
+						message.type=5;
+						strcpy(message.source,source);
+						strcpy(message.data,data);
+						message.size=strlen(message.data);
+					}
+					//if doesnt exists, send jn_nack
+					else{
+						message.type=6;
+						strcpy(message.source,source);
+						strcpy(message.data,data);
+						strcat(message.data,",Session does not exists");
+						message.size=strlen(message.data);
+					}
+
+					break;
+				case(7):
+					//leave session, get user id and delete their current session id
+					for (l=0;l<MAXUSERS;l++){
+							if (strcmp (usernames[l],source)==0)break;
+					}
+					strcpy(session_ids[l],"");	
+					
+					break;
+				case(8):
+					//add new session, get user id and add the session id
+					for (l=0;l<MAXUSERS;l++){
+							if (strcmp (usernames[l],source)==0)break;
+					}
+					strcpy(session_ids[l],data);	
+					//send ack
+					message.type=9;
+					strcpy(message.source,source);
+					strcpy(message.data,data);
+					message.size=strlen(message.data);
+					
+					break;
+		
+
+
+				case(10):
+					//send message
+					message.type=10;
+					strcpy(message.source,source);
+					strcpy(message.data,data);
+					message.size=strlen(message.data);
+					preparePacket(message, buf);
+					// get user id
+					for (l=0;l<MAXUSERS;l++){
+							if (strcmp (usernames[l],source)==0)break;
+					}
+					//get session_id of this user
+					strcpy(user_session,session_ids[l]);
+					
+					// send message to all users with this session id
+
+					for (j=0;j<MAXUSERS;j++){
+						if(strcmp (session_ids[j],user_session)==0){
+ 							if (FD_ISSET(file_id[j], &master)) {
+								if(file_id[j]!=listener &&file_id[j]!=i){
+									if (send(file_id[j], buf, nbytes, 0) == -1) {
+										perror("send");
+										}
+									
+								}
+
+							}
+						}				
+					}
+
+					break;
+
+				case(11):
+					//quack
+					message.type=12;
+					strcpy(message.source,source);
+					for (l=0;l<MAXUSERS;l++){
+							if (file_id[l]!=-1){
+								strcat(message.data,usernames[l]);
+								strcat(message.data,session_ids[l]);
+							}
+					}
+					message.size=strlen(message.data);
+					
+					break;
+		
+
+			}
+			// if it is not a broadcasting message, send packet back to user
+			if(type!=10){
+			//Prepare and send message to user
+				preparePacket(message, buf);
+				if (send(i, buf, nbytes, 0) == -1) {
+					perror("send");
+					}
+			}
+	
+
+
                     }
                 } // END handle data from client
             } // END got new incoming connection
@@ -168,3 +348,57 @@ int main(void) {
 
     return 0;
 }
+
+
+
+void processPacket(int *type,int *size, char *source,char *data , char *buf){
+	int i, j = 0;
+	for (i = 0; buf[i]!= ':'; i++){
+		*type *=10;
+		*type += buf[i] - '0';
+	}
+
+	for (i = i+1; buf[i]!= ':'; i++){
+		*size *=10;
+		*size += buf[i] - '0';
+	}j = i;
+	for (i = i+1; buf[i]!= ':'; i++){
+		source[i-j-1] = buf[i]; 				
+		//printf("%s \n", filename);
+	}
+	data[i-j-1] = '\0';
+	j = i;
+	for (i = i+1; i-j <= *size; i++){
+		data[i-j-1] = buf[i]; 				
+		//printf("%u \n", buf[i]);
+	}
+
+}
+
+
+
+char* preparePacket(struct lab3message message,  char* message_info){
+
+	char buffer [200];
+	sprintf(buffer,"%d:",message.type);
+	strcat(message_info, buffer);
+
+
+	sprintf(buffer,"%d:",message.size);
+	strcat(message_info, buffer);
+
+ 
+	sprintf(buffer,"%d:",message.source);
+	strcat(message_info, buffer);
+
+
+	strcat(message_info, message.data);
+
+	
+
+	return message_info;
+
+}
+
+
+
