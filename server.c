@@ -17,6 +17,25 @@
 #define MAX_NAME 10
 #define MAX_DATA 100
 
+//======== Type specs ========//
+
+#define LOGIN       0
+#define LO_ACK      1
+#define LO_NAK      2
+#define EXIT        3
+#define JOIN        4
+#define JN_ACK      5
+#define JN_NAK      6
+#define LEAVE_SESS  7
+#define NEW_SESS    8
+#define NS_ACK      9
+#define MESSAGE     10
+#define QUERY       11
+#define QU_ACK      12
+#define INVITE      13
+#define QU_INV      14
+
+
 // get sockaddr, IPv4 or IPv6:
 
 
@@ -199,7 +218,7 @@ int main(void) {
 
 			switch(type){
 
-				case (0):
+				case (LOGIN):
 					printf("%s\n","case0");
 					//user=strtok(data,",");
 					//password=strtok(NULL,",");
@@ -241,7 +260,7 @@ int main(void) {
 				
 				break;
 
-				case(3):
+				case(EXIT):
 					//exit
 					close(i); // bye!
 					FD_CLR(i, &master); // remove from master set
@@ -253,7 +272,7 @@ int main(void) {
 				
 					
 					break;
-				case(4):
+				case(JOIN):
 					//join
 					//check if session exists:
 					for(session=0;session<MAXUSERS;session++){
@@ -275,14 +294,14 @@ int main(void) {
 							if (strcmp (usernames[l],source)==0)break;
 						}
 						strcpy(session_ids[l],data);
-						message.type=5;
+						message.type=JN_ACK;
 						strcpy(message.source,source);
 						strcpy(message.data,data);
 						message.size=strlen(message.data);
 					}
 					//if doesnt exists, send jn_nack
 					else{
-						message.type=6;
+						message.type=JN_NAK;
 						strcpy(message.source,source);
 						strcpy(message.data,data);
 						strcat(message.data,",Session does not exists");
@@ -290,7 +309,7 @@ int main(void) {
 					}
 
 					break;
-				case(7):
+				case(LEAVE_SESS):
 					//leave session, get user id and delete their current session id
 					for (l=0;l<MAXUSERS;l++){
 							if (strcmp (usernames[l],source)==0)break;
@@ -300,7 +319,7 @@ int main(void) {
 					file_id[k]=-1;
 					
 					break;
-				case(8):
+				case(NEW_SESS):
 					printf("%s\n", "case8");
 					printf("%s\n", buf);
 					
@@ -327,7 +346,7 @@ int main(void) {
 		
 
 
-				case(10):
+				case(MESSAGE):
 					//send message
 					message.type=10;
 					strcpy(message.source,source);
@@ -359,9 +378,9 @@ int main(void) {
 
 					break;
 
-				case(11):
+				case(QUERY):
 					//quack
-					message.type=12;
+					message.type=QU_ACK;
 					strcpy(message.source,source);
 					memset(message.data,0,strlen(message.data));
 					strcat(message.data,"list of (user session)");
@@ -376,6 +395,63 @@ int main(void) {
 					message.size=strlen(message.data);
 					
 					break;
+
+				case(INVITE):
+					printf("recieved invite\n");
+					for (l=0;l<MAXUSERS;l++){
+						if (strcmp (usernames[l],data)==0)break;
+					}
+					for (j=0;j<MAXUSERS;j++){
+						if (strcmp (usernames[j],source)==0)break;
+					}
+
+					if (l == MAXUSERS){
+						printf("User not found\n");
+						message.type=QU_ACK;
+						strcpy(message.source,source);
+						strcpy(message.data,data);
+						strcpy(message.data,"User not found");
+						message.size=strlen(message.data);
+						type = 0;
+						break;
+					}
+					
+					if (!strcmp(session_ids[j],"")){
+						printf("session not found\n");
+						message.type=QU_ACK;
+						strcpy(message.source,source);
+						strcpy(message.data,data);
+						strcpy(message.data,"session not found");
+						message.size=strlen(message.data);
+						type = 0;
+						break;
+					}
+					printf("data: %s\n", data);
+					printf("l: %d\n", l);
+					printf("usernames[l]: %s\n", usernames[l]);
+					printf("session_ids[j]: %s\n", session_ids[j]);
+		
+					if (session_ids[l] != NULL){
+
+						message.type=QU_INV;
+						strcpy(message.source,source);
+						strcpy(message.data,session_ids[j]);				
+						message.size=strlen(message.data);
+	
+						preparePacket(message, buf);
+
+						if (FD_ISSET(file_id[l], &master)) {
+							if(file_id[l]!=listener &&file_id[l]!=i){
+								if (send(file_id[l], buf, nbytes, 0) == -1) {
+									perror("send");
+									}								
+							}
+						}
+											
+			
+					}
+					
+					break;
 				
 		
 
@@ -388,7 +464,7 @@ int main(void) {
                     
 			
 
-		if(type!=10 && type!=7){
+		if(type!=MESSAGE && type!=LEAVE_SESS && type!=INVITE){
 			printf("%s\n","message being sent");
 			
 			//Prepare and send message to user

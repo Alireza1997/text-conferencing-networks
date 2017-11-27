@@ -36,6 +36,8 @@
 #define MESSAGE     10
 #define QUERY       11
 #define QU_ACK      12
+#define INVITE      13
+#define QU_INV      14
 
 //======== prototypes ========//
 struct packet{
@@ -207,25 +209,7 @@ int main(int argc, char *argv[]) {
 
                         numbytes = send(sockfd,sendBuf,strlen(sendBuf),0);
                         printf("sendBytes: %d \n", numbytes);
-                        
-
-                        //======== login ack ========//
-                        // struct timeval tv;
-                        // tv.tv_sec = 0;
-                        // tv.tv_usec = 100000;
-                        // setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,sizeof(struct timeval));
-                        
-                        // int numbytes=recv(sockfd, buf,sizeof (buf) , 0);
-                        // deProcessPacket(&reData.type,&reData.size, reData.source,	reData.msg, buf);
-                
-                        // if (reData.type == LO_ACK){
-                        //     printf("recieveBytes: %d \n", numbytes);
-                        //     printf("message recieved: %s \n", buf);
-                        //     loggedIn = 1;
-                        // }else if (reData.type == LO_NAK){
-                        //     printf("\n ACK not recieved \n\n");
-                            // loggedIn = 1; //=========================REMOVE==============================//
-                        // }
+                                                
                         continue;
                     }
                     
@@ -339,6 +323,33 @@ int main(int argc, char *argv[]) {
                     printf("bye!");
                     exit(0);
                 }
+                else if(!strcmp(command,"/invite")){
+                    printf("invite command \n");
+                    if (loggedIn){
+                        char inviteID[MAX_FIELD];
+                        
+                        //======== input and packet processing ========//
+                        scanf("%s", inviteID);
+                        
+                        strcpy(data.msg,inviteID);
+                        data.type = INVITE;
+                        data.size = strlen(inviteID);
+                        strcpy(data.source, clientID);
+
+                        processPacket(data,sendBuf);
+
+                        //======== request ========//
+
+                        numbytes = send(sockfd,sendBuf,strlen(sendBuf),0);
+                        printf("sendBytes: %d \n", numbytes);
+                        continue;
+                    }
+                    else{
+                        printf("Not logged in\n");
+                        continue;
+                    }
+                    
+                }
 
             }
             else{
@@ -405,6 +416,29 @@ int main(int argc, char *argv[]) {
                     break;        
                 case(QU_ACK):
                     printf("%s\n", reData.msg);
+                    break;
+                case(QU_INV):
+                                        
+                    //======== input and packet processing ========//
+                    do{
+                        printf("join session %s? (Y/N)\n", reData.msg);
+                        scanf("%s", messageBuf);
+                    }while(!strcmp("Y",messageBuf) && !strcmp("N",messageBuf));
+
+                    if (!strcmp("N",messageBuf))
+                        break;
+
+                    strcpy(data.msg,reData.msg);
+                    data.type = JOIN;
+                    data.size = strlen(data.msg);
+                    strcpy(data.source, clientID);
+
+                    processPacket(data,sendBuf);
+
+                    //======== request ========//
+
+                    numbytes = send(sockfd,sendBuf,strlen(sendBuf),0);
+                    printf("sendBytes: %d \n", numbytes);
                     break;
                 default:
                     printf("invalid reply\n");
